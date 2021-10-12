@@ -1,0 +1,30 @@
+
+name: Development CI
+
+on:
+  push:
+    branches:
+      - 'dev'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: Send in Project to AWS
+        run: |
+            mkdir artefacts 
+            tar -czvf artefacts/latest-dev.tar --exclude=./artefacts . 
+            echo "taring completed and now proceeding with scp" 
+            echo "${{ secrets.SSH_EC2_KEY }}" > ~/ec2.pem
+            sudo chmod 600 ~/ec2.pem
+            scp -i ~/ec2.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ./artefacts/latest-dev.tar ${{ secrets.SSH_EC2_USERNAME }}@${{ secrets.SSH_EC2_IP }}:~/report-generation/
+        working-directory: ./
+      - name: Deploy FE and BE
+        uses: garygrossgarten/github-action-ssh@release
+        with:
+          command: screen -S report -X stuff "^C"; sudo tar -zxvf /home/${{secrets.SSH_EC2_USERNAME}}/report-generation/latest-dev.tar -C report-generation/ ;sudo chown -R ubuntu:ubuntu /home/ubuntu/report-generation/; screen -S report -X stuff "pip install -r requirements.txt^M"; screen -S report -X stuff "python3 generate.py^M"
+          host: ${{secrets.SSH_EC2_IP}}
+          username: ${{secrets.SSH_EC2_USERNAME}}
+          privateKey: ${{secrets.SSH_EC2_KEY}}
+          port: ${{secrets.SSH_PORT}}
